@@ -44,6 +44,37 @@ for path in json.loads(os.environ['CHANGED_PATHS']): sys.stdout.buffer.write(pat
         self.assertEqual(self.preflight(['docs/design/backups.md'])['go'], 'false')
         self.assertEqual(self.preflight([], event='push')['go'], 'true')
 
+    def test_agenteval_paths_select_the_harness_job(self):
+        for path in ['apps/agenteval/src/trachuan_agenteval/agent.py',
+                     'apps/agenteval/tests/fixtures/matcher_ranges.json',
+                     'apps/agenteval/uv.lock', '.github/workflows/ci.yml']:
+            with self.subTest(path=path):
+                self.assertEqual(self.preflight([path])['agenteval'], 'true')
+        for path in ['docs/runbooks/agent-eval.md', 'apps/docembed/pyproject.toml',
+                     'apps/web/app/app.vue']:
+            with self.subTest(path=path):
+                self.assertEqual(self.preflight([path])['agenteval'], 'false')
+        self.assertEqual(self.preflight([], event='push')['agenteval'], 'true')
+
+    def test_agenteval_job_uses_python_pins_and_the_required_gate(self):
+        workflow = WORKFLOW.read_text()
+        job = workflow.split('\n  agenteval:\n', 1)[1].split('\n  queryembed:\n', 1)[0]
+        self.assertIn("if: needs.preflight.outputs.agenteval == 'true'", job)
+        self.assertIn('working-directory: apps/agenteval', job)
+        for command in ['uv sync --frozen', 'uv run --frozen pytest',
+                        'uv run --frozen ruff check', 'uv run --frozen ruff format --check']:
+            self.assertIn('      - run: ' + command + '\n', job)
+        docembed = workflow.split('\n  docembed:\n', 1)[1].split('\n  agenteval:\n', 1)[0]
+        self.assertEqual(re.findall(r'      - uses: (\S+)', job),
+                         re.findall(r'      - uses: (\S+)', docembed))
+        aggregate = workflow.split('\n  ci:\n', 1)[1]
+        needs = re.search(r'    needs:\s*\[([^\]]+)\]', aggregate).group(1)
+        self.assertIn('agenteval', [name.strip() for name in needs.split(',')])
+        self.assertIn('AGENTEVAL_NEEDED: ${{ needs.preflight.outputs.agenteval }}', aggregate)
+        self.assertIn('AGENTEVAL: ${{ needs.agenteval.result }}', aggregate)
+        self.assertIn('test "$AGENTEVAL" = success', aggregate)
+        self.assertIn('test "$AGENTEVAL" = skipped', aggregate)
+
     def test_required_static_job_runs_all_deploy_checks(self):
         workflow = WORKFLOW.read_text()
         static = workflow.split('\n  static:\n', 1)[1].split('\n  integration:\n', 1)[0]

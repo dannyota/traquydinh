@@ -1,0 +1,232 @@
+{
+  "producer": "go build ./apps/corpus/cmd/agentmatch; JSON requests passed to agentmatch on stdin",
+  "range": {
+    "arguments": {
+      "items": [
+        {
+          "handle": "vn:vbpl:117498",
+          "from": "dieu-3/khoan-2",
+          "to": "dieu-4"
+        }
+      ]
+    },
+    "result": {
+      "release": "vn/20990101_1",
+      "items": [
+        {
+          "doc": "vn:vbpl:117498",
+          "complete": true,
+          "units": [
+            {
+              "kind": "lead",
+              "anchor": "dieu-3"
+            },
+            {
+              "kind": "provision",
+              "anchor": "dieu-3/khoan-2"
+            },
+            {
+              "kind": "provision",
+              "anchor": "dieu-4"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "records": [
+    {
+      "name": "contaminated_later_article",
+      "request": {
+        "case_id": "dev-001",
+        "citations": ["vn:vbpl:117498#dieu-4"],
+        "hits": [
+          {
+            "identity": {
+              "country": "vn",
+              "document_key": "vn:vbpl:117498",
+              "anchor": "dieu-3/khoan-2"
+            },
+            "path": [
+              {
+                "identity": {
+                  "country": "vn",
+                  "document_key": "vn:vbpl:117498",
+                  "anchor": "dieu-3"
+                }
+              }
+            ]
+          },
+          {
+            "identity": {
+              "country": "vn",
+              "document_key": "vn:vbpl:117498",
+              "anchor": "dieu-4"
+            },
+            "path": [
+              {
+                "identity": {
+                  "country": "vn",
+                  "document_key": "vn:vbpl:117498",
+                  "anchor": "dieu-3"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "score": {
+        "matched": 1,
+        "expected": 1
+      }
+    },
+    {
+      "name": "verified_later_article",
+      "request": {
+        "case_id": "dev-001",
+        "citations": ["vn:vbpl:117498#dieu-4"],
+        "hits": [
+          {
+            "identity": {
+              "country": "vn",
+              "document_key": "vn:vbpl:117498",
+              "anchor": "dieu-3/khoan-2"
+            },
+            "path": [
+              {
+                "identity": {
+                  "country": "vn",
+                  "document_key": "vn:vbpl:117498",
+                  "anchor": "dieu-3"
+                }
+              }
+            ]
+          },
+          {
+            "identity": {
+              "country": "vn",
+              "document_key": "vn:vbpl:117498",
+              "anchor": "dieu-4"
+            },
+            "path": []
+          }
+        ]
+      },
+      "score": {
+        "matched": 0,
+        "expected": 1
+      }
+    },
+    {
+      "name": "verified_first_clause",
+      "request": {
+        "case_id": "dev-001",
+        "citations": ["vn:vbpl:117498#dieu-3/khoan-2"],
+        "hits": [
+          {
+            "identity": {
+              "country": "vn",
+              "document_key": "vn:vbpl:117498",
+              "anchor": "dieu-3/khoan-2"
+            },
+            "path": [
+              {
+                "identity": {
+                  "country": "vn",
+                  "document_key": "vn:vbpl:117498",
+                  "anchor": "dieu-3"
+                }
+              }
+            ]
+          },
+          {
+            "identity": {
+              "country": "vn",
+              "document_key": "vn:vbpl:117498",
+              "anchor": "dieu-4"
+            },
+            "path": []
+          }
+        ]
+      },
+      "score": {
+        "matched": 1,
+        "expected": 1
+      }
+    },
+    {
+      "name": "contaminated_first_clause",
+      "request": {
+        "case_id": "dev-001",
+        "citations": ["vn:vbpl:117498#dieu-3/khoan-2"],
+        "hits": [
+          {
+            "identity": {
+              "country": "vn",
+              "document_key": "vn:vbpl:117498",
+              "anchor": "dieu-3/khoan-2"
+            },
+            "path": [
+              {
+                "identity": {
+                  "country": "vn",
+                  "document_key": "vn:vbpl:117498",
+                  "anchor": "dieu-3"
+                }
+              }
+            ]
+          },
+          {
+            "identity": {
+              "country": "vn",
+              "document_key": "vn:vbpl:117498",
+              "anchor": "dieu-4"
+            },
+            "path": [
+              {
+                "identity": {
+                  "country": "vn",
+                  "document_key": "vn:vbpl:117498",
+                  "anchor": "dieu-3"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "score": {
+        "matched": 1,
+        "expected": 1
+      }
+    },
+    {
+      "name": "unverified_first_clause",
+      "request": {
+        "case_id": "dev-001",
+        "citations": ["vn:vbpl:117498#dieu-3/khoan-2"],
+        "hits": [
+          {
+            "identity": {
+              "country": "vn",
+              "document_key": "vn:vbpl:117498",
+              "anchor": "dieu-3/khoan-2"
+            },
+            "path": []
+          },
+          {
+            "identity": {
+              "country": "vn",
+              "document_key": "vn:vbpl:117498",
+              "anchor": "dieu-4"
+            },
+            "path": []
+          }
+        ]
+      },
+      "score": {
+        "matched": 0,
+        "expected": 1
+      }
+    }
+  ]
+}
