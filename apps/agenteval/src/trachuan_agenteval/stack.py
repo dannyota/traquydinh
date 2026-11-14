@@ -6,11 +6,16 @@ import socket
 import subprocess
 import tempfile
 import time
-from collections.abc import Mapping
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
 
 import httpx
+
+from .processes import child_environment
+
+
+class AdminURLPasswordError(ValueError):
+    pass
 
 
 def loopback(host: str) -> bool:
@@ -50,22 +55,6 @@ def database_url(admin: str, name: str) -> str:
         raise ValueError("invalid local PostgreSQL administrator URL") from None
 
 
-def child_environment(source: Mapping[str, str]) -> dict[str, str]:
-    allowed = {
-        "PATH",
-        "HOME",
-        "TMPDIR",
-        "GOCACHE",
-        "GOMODCACHE",
-        "GOLANGCI_LINT_CACHE",
-        "PGPASSWORD",
-        "PGPASSFILE",
-    }
-    env = {key: source[key] for key in allowed if key in source}
-    env["GOPROXY"] = "off"
-    return env
-
-
 class Stack:
     def __init__(
         self,
@@ -78,6 +67,10 @@ class Stack:
     ) -> None:
         validate_loopback(embedder)
         database_url(admin, "postgres")
+        if urlsplit(admin).password is not None:
+            raise AdminURLPasswordError(
+                "CORPUS_TEST_ADMIN_URL must not contain a password; use PGPASSWORD or PGPASSFILE"
+            )
         if not corpus:
             raise ValueError("a separate corpus reader URL is required")
         database_url(corpus, "{database}")
@@ -90,6 +83,8 @@ class Stack:
         self.root, self.out, self.embedder, self.ports = root, out, embedder, ports
         self.admin, self.corpus = admin, corpus
         self.env = child_environment(os.environ)
+        self.pg_env = child_environment(os.environ, "postgres")
+        self.system_env = child_environment(os.environ, "system")
         self.processes: list[subprocess.Popen] = []
         self.created = False
         self.temporary: tempfile.TemporaryDirectory | None = None
@@ -100,7 +95,7 @@ class Stack:
         result = subprocess.run(
             args,
             cwd=self.root,
-            env=env or self.env,
+            env=env if env is not None else self.env,
             input=sql,
             text=True,
             stdout=subprocess.DEVNULL,
@@ -111,7 +106,11 @@ class Stack:
             raise RuntimeError("local stack command failed: " + Path(args[0]).name)
 
     def sql(self, url: str, sql: str) -> None:
-        self.command(["psql", "-X", "-d", url, "-v", "ON_ERROR_STOP=1", "-v", "db=" + self.name], self.env, sql)
+        self.command(
+            ["psql", "-X", "-d", url, "-v", "ON_ERROR_STOP=1", "-v", "db=" + self.name],
+            self.pg_env,
+            sql,
+        )
 
     def __enter__(self) -> Stack:
         try:
@@ -146,7 +145,7 @@ class Stack:
                     capture_output=True,
                     text=True,
                     check=False,
-                    env=self.env,
+                    env=self.system_env,
                 )
                 pids = set(owners.stdout.split())
                 if owners.returncode not in {0, 1} or (pids and pids != {str(process.pid)}):
@@ -192,7 +191,7 @@ class Stack:
         corpus += ("&" if "?" in corpus else "?") + urlencode(
             {"default_transaction_read_only": "on"}
         )
-        base_env = self.env | {
+        base_env = self.pg_env | {
             "SERVER_AUTH_DATABASE_URL": auth,
             "SERVER_CORPUS_DATABASE_URL": corpus,
             "SERVER_QUERY_EMBEDDER_URL": self.embedder,
@@ -235,7 +234,7 @@ class Stack:
                     "-redirect-uri",
                     server + "/api/v1/auth/google/callback",
                 ],
-                env,
+                self.system_env,
             )
             self.wait(google + "/.well-known/openid-configuration", process, google_port)
             process = self.spawn([str(self.scratch / "server"), "serve"], env)

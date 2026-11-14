@@ -38,8 +38,11 @@ def summarize(records: list[dict], models: list[str], modes: list[str], expected
         metrics = {}
         for mode, rows in groups.items():
             unique = len({(r["case_id"], r["run"]) for r in rows}) == len(rows)
+            completed = [r for r in rows if r["complete"]]
             metrics[mode] = {
                 "tasks": len(rows),
+                "completed_tasks": len(completed),
+                "incomplete_tasks": len(rows) - len(completed),
                 "complete": len(rows) == expected and unique and all(r["complete"] for r in rows),
             }
             for metric in (
@@ -49,9 +52,11 @@ def summarize(records: list[dict], models: list[str], modes: list[str], expected
                 "tool_result_codepoints",
                 "wall_seconds",
             ):
-                metrics[mode]["mean_" + metric] = mean(r[metric] for r in rows) if rows else None
+                metrics[mode]["mean_" + metric] = (
+                    mean(r[metric] for r in completed) if completed else None
+                )
             metrics[mode]["mean_usage"] = {
-                name: mean(r["usage"][name] for r in rows) if rows else None
+                name: mean(r["usage"][name] for r in completed) if completed else None
                 for name in ("uncached_input", "cache_write", "cache_read", "output")
             }
         gates = {}

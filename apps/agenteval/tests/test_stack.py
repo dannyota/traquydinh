@@ -33,7 +33,7 @@ def test_child_environment_drops_model_keys_and_inherited_server_settings():
             "PGPASSWORD": "synthetic-db",
         }
     )
-    assert env == {"PATH": "/bin", "PGPASSWORD": "synthetic-db", "GOPROXY": "off"}
+    assert env == {"PATH": "/bin", "GOPROXY": "off"}
 
 
 @pytest.mark.parametrize("url", ["https://example.com", "http://127.0.0.1.evil/", "file:///tmp/x"])
@@ -104,3 +104,19 @@ def test_real_corpus_requires_separate_reader_role(tmp_path, corpus):
             "postgres://fixture@127.0.0.1/postgres",
             corpus,
         )
+
+
+@pytest.mark.parametrize("password", ["synthetic-password", "", "synthetic%40password"])
+def test_admin_password_is_rejected_before_startup_without_exposing_value(tmp_path, password):
+    from trachuan_agenteval.stack import Stack
+
+    with pytest.raises(ValueError, match="CORPUS_TEST_ADMIN_URL") as error:
+        Stack(
+            tmp_path,
+            tmp_path,
+            "http://127.0.0.1:8091",
+            [29080, 29082, 29081, 29083],
+            f"postgres://admin:{password}@127.0.0.1/postgres",
+            "postgres://reader:synthetic-reader@127.0.0.1/{database}",
+        )
+    assert "synthetic" not in str(error.value)

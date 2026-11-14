@@ -1,8 +1,11 @@
 import json
+import os
 import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from .processes import child_environment
 
 
 def parse_citations(answer: str) -> list[str]:
@@ -26,20 +29,26 @@ def identity(handle: str) -> dict:
 class Evidence:
     hits: list[dict] = field(default_factory=list)
     pending: dict[str, list[dict]] = field(default_factory=dict)
+    paths: dict[tuple[str, str, str], list[dict]] = field(default_factory=dict)
 
     def add(self, name: str, arguments: dict, result: dict) -> None:
+        release = result.get("release", "")
         if name == "search":
             for hit in result.get("hits", []) + result.get("non_current", []):
                 if not hit.get("handle"):
                     continue
+                path = [
+                    {"identity": identity(hit["doc"] + "#" + p["anchor"])}
+                    for p in hit.get("path", [])
+                    if p.get("anchor")
+                ]
+                for i, node in enumerate(path):
+                    self.paths[(release, hit["doc"], node["identity"]["anchor"])] = path[: i + 1]
+                self.paths[(release, hit["doc"], identity(hit["handle"])["anchor"])] = path
                 self.hits.append(
                     {
                         "identity": identity(hit["handle"]),
-                        "path": [
-                            {"identity": identity(hit["doc"] + "#" + p["anchor"])}
-                            for p in hit.get("path", [])
-                            if p.get("anchor")
-                        ],
+                        "path": path,
                         "fragments": hit.get("fragments", []),
                         "relations": [
                             {
@@ -82,12 +91,16 @@ class Evidence:
                         for u in units
                         if u.get("kind") == "lead" and u.get("anchor")
                     ]
+                    first = next(
+                        (u.get("anchor") for u in units if u.get("kind") == "provision"), None
+                    )
                     for unit in units:
                         if unit.get("kind") == "provision" and unit.get("anchor"):
+                            verified = self.paths.get((release, item["doc"], unit["anchor"]), [])
                             self.hits.append(
                                 {
                                     "identity": identity(item["doc"] + "#" + unit["anchor"]),
-                                    "path": paths,
+                                    "path": verified or (paths if unit["anchor"] == first else []),
                                 }
                             )
 
@@ -104,6 +117,7 @@ class Matcher:
             capture_output=True,
             text=True,
             check=False,
+            env=child_environment(os.environ, "system"),
         )
         if result.returncode:
             raise RuntimeError("product matcher failed")

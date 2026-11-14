@@ -14,7 +14,10 @@ the repository root. `work/` is already ignored.
 - Supply `CORPUS_TEST_ADMIN_URL` through the process environment. Its default is
   `postgres://trachuan@127.0.0.1:25433/postgres`. The role must create and drop
   temporary auth databases. Credentials stay outside command arguments and
-  results. The harness never loads environment files.
+  results. Password-bearing `CORPUS_TEST_ADMIN_URL` values are rejected at
+  startup; use `PGPASSWORD` or `PGPASSFILE`. The harness never loads environment
+  files. `psql -d` receives the password-free administrator or temporary auth
+  URL.
 - Supply `AGENTEVAL_CORPUS_DATABASE_URL`, or `SERVER_CORPUS_DATABASE_URL`, as a
   loopback PostgreSQL URL for a separate read-only corpus role, as in
   [server-local](server-local.md). Both URLs must name their roles explicitly;
@@ -22,7 +25,8 @@ the repository root. `work/` is already ignored.
   the corpus database path with `{database}` and also forces
   `default_transaction_read_only=on`. Only `sslmode` and `connect_timeout` URL
   options are accepted. `PGPASSWORD` and `PGPASSFILE` are inherited by local
-  children.
+  PostgreSQL clients and servers only. Corpus reader URLs may contain passwords;
+  they go only into server environments, never command arguments or results.
 - Include the sibling server change that implements
   `SERVER_COMPACT_RELATED=omit` before measuring trimmed compact.
 - Fill the OpenAI row in `apps/agenteval/src/trachuan_agenteval/prices.json`
@@ -38,8 +42,11 @@ the existing corpus. It starts two loopback servers and one fake Google process
 for each server, since fake Google accepts one exact callback. Normal and
 trimmed servers use ports 29080 and 29082; fake Google uses 29081 and 29083.
 Override all four with `--ports 29080,29082,29081,29083`. The account encryption
-key and Google credentials are synthetic local values. Child processes receive
-no model API keys.
+key and Google credentials are synthetic local values. Every child receives an
+explicit environment for its purpose. Builds, the matcher, fake Google and
+`lsof` receive no PostgreSQL credentials. No child inherits parent API keys,
+tokens or secrets; only the server receives the harness's synthetic Google
+credential explicitly.
 
 Python follows the existing authorization-code flow with S256 PKCE, fake Google
 login and CSRF-protected consent for a preregistered `agenteval` client. Cookies
@@ -104,14 +111,15 @@ explicit limit, remain the model's. Without a limit, the server uses its mode
 default. Models receive no shell, browser or provider tools.
 
 Tasks run serially in case, repetition, model, mode order. After every model
-request, the harness adds provider-reported usage times the price row. Once
-spend reaches the ceiling it schedules no new task, finishes the current task
-and marks an over-budget run incomplete. The ceiling is a scheduling stop, not a
-hard spend bound: the in-flight task can overshoot it. SDK retries are disabled.
-Provider, transport or scorer errors stop scheduling because spend or execution
-may be incomplete. Model refusals score zero; task caps mark the task
-incomplete. Exit 0 means execution completed, 2 means incomplete, and 1 means
-setup failed. A failed quality gate does not change the execution exit.
+request, the harness adds provider-reported usage times the price row. It checks
+the shared budget before every request. Once spend reaches the ceiling, it
+schedules no further request or task. An interrupted task records `budget` and
+is incomplete. The in-flight request can finish and overshoot the ceiling; the
+remainder of that task does not run. SDK retries are disabled. Provider,
+transport or scorer errors stop scheduling because spend or execution may be
+incomplete. Model refusals score zero; task caps mark the task incomplete. Exit
+0 means execution completed, 2 means incomplete, and 1 means setup failed. A
+failed quality gate does not change the execution exit.
 
 `--out <dir>` selects a fresh output directory; an existing directory is
 refused. Use a location under `work/agenteval/` to retain ignore coverage.
@@ -131,8 +139,10 @@ the named temporary auth database. Never drop the corpus database.
   elapsed seconds, cost and stop reason. It stores no question, answer,
   reasoning, tool arguments, tool bodies or credentials.
 - `summary.json`: execution status, planned and scheduled task counts, spend,
-  means per model and mode, and both gate verdicts. Missing, duplicate, unpaired
-  or incomplete tasks make the relevant gate unavailable.
+  means from completed tasks per model and mode, completed and incomplete task
+  counts, and both gate verdicts. Incomplete tasks stay in JSONL but enter none
+  of the means. Missing, duplicate, unpaired or incomplete tasks make the
+  relevant gate unavailable.
 
 Citations use `[[cite:vn:vbpl:KEY#ANCHOR]]`, or a document handle without an
 anchor. The tiny `apps/corpus/cmd/agentmatch` command loads the embedded
@@ -141,8 +151,11 @@ matcher. Only cited search identities, returned document metadata, units from
 completed read chains and complete search fragments enter scoring. Document
 citations earn only document credit. Ancestor paths, complete fragments and
 explicit relation hashes retain the product matcher's rules. No child fragment
-is invented from read text or from an anchor's spelling. These scores measure
-citations, not the legal correctness of the answer.
+is invented from read text or from an anchor's spelling. Range leads establish
+ancestry only for the first provision and its parts. Later units reuse only
+their own previously observed search paths from the same release, or earn direct
+identity credit without ancestor credit. These scores measure citations, not the
+legal correctness of the answer.
 
 Summed input includes all three Anthropic input fields and every OpenAI input
 token over all requests, including cached input. Tool-result size counts the
@@ -183,5 +196,8 @@ bash scripts/check-lengths.sh
 ```
 
 Unit tests block socket connections and inject recorded provider and OAuth
-responses. The primary runs `make pre-push`, the real-corpus dry run and the
-paid pilot separately. No paid result is implied by the offline tests.
+responses. `tests/fixtures/matcher_ranges.json` records requests and scores from
+the real Go matcher for a range crossing two articles. CI runs the app's tests
+and Ruff checks for `apps/agenteval/**` changes. The primary runs
+`make pre-push`, the real-corpus dry run and the paid pilot separately. No paid
+result is implied by the offline tests.

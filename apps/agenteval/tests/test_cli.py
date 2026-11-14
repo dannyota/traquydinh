@@ -133,3 +133,33 @@ def test_at_most_one_openai_model_in_plan():
     )
     with pytest.raises(ValueError):
         prepare_plan(args, ROOT)
+
+
+def test_password_configuration_error_names_variable_without_value(tmp_path, monkeypatch, capsys):
+    from trachuan_agenteval import cli
+    from trachuan_agenteval.stack import Stack
+
+    async def run(*args):
+        Stack(
+            tmp_path,
+            tmp_path,
+            "http://127.0.0.1:8091",
+            [29080, 29082, 29081, 29083],
+            "postgres://admin:synthetic-password@127.0.0.1/postgres",
+            "postgres://reader@127.0.0.1/{database}",
+        )
+        return 0
+
+    monkeypatch.setattr(cli, "run", run)
+    monkeypatch.setattr(cli.logging, "disable", lambda *args: None)
+    monkeypatch.setattr(cli.signal, "signal", lambda *args: None)
+    monkeypatch.setattr(
+        cli.sys, "argv", ["agenteval", "run", "--query-embedder-url", "http://127.0.0.1:8091"]
+    )
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main()
+    assert exit_info.value.code == 1
+    message = capsys.readouterr().err
+    assert "CORPUS_TEST_ADMIN_URL" in message
+    assert "PGPASSWORD" in message
+    assert "synthetic-password" not in message

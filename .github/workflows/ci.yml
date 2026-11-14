@@ -20,6 +20,7 @@ jobs:
       schema: ${{ steps.paths.outputs.schema }}
       go: ${{ steps.paths.outputs.go }}
       docembed: ${{ steps.paths.outputs.docembed }}
+      agenteval: ${{ steps.paths.outputs.agenteval }}
       queryembed: ${{ steps.paths.outputs.queryembed }}
       web: ${{ steps.paths.outputs.web }}
       tofu: ${{ steps.paths.outputs.tofu }}
@@ -36,6 +37,7 @@ jobs:
           schema=true
           go=true
           docembed=true
+          agenteval=true
           queryembed=true
           web=true
           tofu=true
@@ -45,6 +47,7 @@ jobs:
             schema=false
             go=false
             docembed=false
+            agenteval=false
             queryembed=false
             web=false
             tofu=false
@@ -54,6 +57,9 @@ jobs:
               esac
               case "$path" in
                 apps/docembed/*|.github/workflows/*) docembed=true ;;
+              esac
+              case "$path" in
+                apps/agenteval/*|.github/workflows/*) agenteval=true ;;
               esac
               case "$path" in
                 apps/queryembed/*|internal/embedding/*|go.mod|go.sum|Makefile|scripts/queryembed-native.sh|.github/workflows/ci.yml) queryembed=true ;;
@@ -75,7 +81,7 @@ jobs:
             done < "$paths"
             rm "$paths"
           fi
-          printf '%s\n' "schema=$schema" "go=$go" "docembed=$docembed" \
+          printf '%s\n' "schema=$schema" "go=$go" "docembed=$docembed" "agenteval=$agenteval" \
             "queryembed=$queryembed" "web=$web" "tofu=$tofu" >> "$GITHUB_OUTPUT"
 
   schema:
@@ -301,6 +307,22 @@ jobs:
       - run: uv run --frozen ruff format --check
       - run: uv run --frozen pytest
 
+  agenteval:
+    needs: [preflight]
+    if: needs.preflight.outputs.agenteval == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/agenteval
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+      - run: uv sync --frozen
+      - run: uv run --frozen pytest
+      - run: uv run --frozen ruff check
+      - run: uv run --frozen ruff format --check
+
   queryembed:
     needs: [preflight]
     if: needs.preflight.outputs.queryembed == 'true'
@@ -362,7 +384,19 @@ jobs:
 
   ci:
     if: always()
-    needs: [preflight, static, integration, e2e, docembed, queryembed, schema, web, opentofu]
+    needs:
+      [
+        preflight,
+        static,
+        integration,
+        e2e,
+        docembed,
+        agenteval,
+        queryembed,
+        schema,
+        web,
+        opentofu,
+      ]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     env:
@@ -375,6 +409,8 @@ jobs:
       E2E: ${{ needs.e2e.result }}
       DOCEMBED_NEEDED: ${{ needs.preflight.outputs.docembed }}
       DOCEMBED: ${{ needs.docembed.result }}
+      AGENTEVAL_NEEDED: ${{ needs.preflight.outputs.agenteval }}
+      AGENTEVAL: ${{ needs.agenteval.result }}
       QUERYEMBED_NEEDED: ${{ needs.preflight.outputs.queryembed }}
       QUERYEMBED: ${{ needs.queryembed.result }}
       WEB_NEEDED: ${{ needs.preflight.outputs.web }}
@@ -423,6 +459,13 @@ jobs:
             test "$DOCEMBED" = success
           elif [ "$DOCEMBED_NEEDED" = false ]; then
             test "$DOCEMBED" = skipped
+          else
+            exit 1
+          fi
+          if [ "$AGENTEVAL_NEEDED" = true ]; then
+            test "$AGENTEVAL" = success
+          elif [ "$AGENTEVAL_NEEDED" = false ]; then
+            test "$AGENTEVAL" = skipped
           else
             exit 1
           fi

@@ -23,7 +23,7 @@ from .prompt import SYSTEM
 from .providers import AnthropicProvider, OpenAIProvider
 from .runner import execute
 from .scoring import Matcher
-from .stack import Stack, validate_loopback
+from .stack import AdminURLPasswordError, Stack, validate_loopback
 from .transport import connect
 from .usage import Budget
 
@@ -96,7 +96,7 @@ def prepare_plan(args: argparse.Namespace, root: Path) -> dict:
         "effort": args.effort,
         "corpus_database": "corpus_vn_20261114_5",
         "budget_policy": (
-            "Stop new tasks at the ceiling; finish the task in flight. Overshoot is possible."
+            "Check the ceiling before every request; finish only the request in flight."
         ),
     }
 
@@ -231,6 +231,9 @@ def main() -> None:
         code = asyncio.run(run(parse_args(), repository_root()))
     except KeyboardInterrupt, SystemExit:
         raise
+    except AdminURLPasswordError as error:
+        print(str(error), file=sys.stderr)
+        code = 1
     except Exception:
         print(
             "agenteval failed; check local prerequisites, arguments and price configuration",

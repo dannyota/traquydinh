@@ -48,6 +48,7 @@ async def execute(
                         max_turns,
                         max_tool_calls,
                         charge,
+                        can_request=lambda: budget.can_schedule,
                     )
                     try:
                         score = matcher.score(case["id"], result.citations, result.evidence)
@@ -89,6 +90,7 @@ async def execute(
         "budget_exceeded": budget.spent > budget.cap,
         "planned_tasks": planned,
         "scheduled_tasks": len(records),
+        "incomplete_tasks": sum(not r["complete"] for r in records),
         "models": summarize(records, models, modes, len(cases) * runs),
         "limitations": ["Development cohort reused; small sample; no superiority claim."],
     }

@@ -240,3 +240,37 @@ def test_max_turn_and_tool_cap_prevent_extra_requests():
 def test_citation_parser_preserves_unicode_anchors_and_duplicate_suffixes():
     handle = "vn:vbpl:synthetic#dieu-1~2/khoan-1/diem-đ"
     assert parse_citations(f"[[cite:{handle}]]") == [handle]
+
+
+@pytest.mark.parametrize("initially_blocked", [False, True])
+def test_budget_is_checked_immediately_before_each_provider_request(initially_blocked):
+    from trachuan_agenteval.providers import Call, Reply
+
+    requests = []
+    allowed = not initially_blocked
+
+    async def request(*args):
+        requests.append(1)
+        return Reply(Usage(), "fake", [Call("call", "search", {})], "", "tools", [])
+
+    async def call(*args):
+        nonlocal allowed
+        allowed = False
+        return SimpleNamespace(text="{}", structured={})
+
+    result = asyncio.run(
+        run_task(
+            SimpleNamespace(request=request, append=lambda *args: None),
+            SimpleNamespace(call=call),
+            TOOLS,
+            "fixture",
+            "full",
+            3,
+            5,
+            lambda usage: None,
+            can_request=lambda: allowed,
+        )
+    )
+    assert len(requests) == (0 if initially_blocked else 1)
+    assert result.stop_reason == "budget"
+    assert not result.complete

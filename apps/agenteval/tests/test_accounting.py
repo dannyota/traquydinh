@@ -107,3 +107,18 @@ def test_duplicate_task_keys_cannot_make_gate_available():
         summarize(records, ["fake"], ["full", "compact"], 2)["fake"]["gates"]["compact_vs_full"]
         == "unavailable"
     )
+
+
+def test_gate_means_exclude_incomplete_tasks_and_report_counts():
+    complete = row("compact", 2, 80)
+    interrupted = row("compact", 0, 10_000, case="interrupted")
+    interrupted.update(complete=False, stop_reason="budget")
+    summary = summarize([complete, interrupted], ["fake"], ["compact"], 2)
+    mode = summary["fake"]["modes"]["compact"]
+    assert mode["tasks"] == 2
+    assert mode["completed_tasks"] == 1
+    assert mode["incomplete_tasks"] == 1
+    assert mode["mean_expected_cited"] == 2
+    assert mode["mean_summed_input_tokens"] == 80
+    assert mode["mean_usage"]["uncached_input"] == 80
+    assert summary["fake"]["gates"]["compact_vs_full"] == "unavailable"

@@ -34,12 +34,16 @@ async def run_task(
     max_tool_calls: int,
     on_usage: Callable[[Usage], None],
     clock: Callable[[], float] = time.monotonic,
+    can_request: Callable[[], bool] | None = None,
 ) -> Outcome:
     started = clock()
     outcome = Outcome()
     history = [{"role": "user", "content": question}]
     names = {tool["name"] for tool in tools}
     for _ in range(max_turns):
+        if can_request is not None and not can_request():
+            outcome.stop_reason = "budget"
+            break
         try:
             reply = await provider.request(SYSTEM, history, tools)
         except Exception:
@@ -53,6 +57,9 @@ async def run_task(
             outcome.stop_reason = reply.stop
             if reply.stop == "final":
                 outcome.citations = parse_citations(reply.text)
+            break
+        if can_request is not None and not can_request():
+            outcome.stop_reason = "budget"
             break
         results = []
         for call in reply.calls:
